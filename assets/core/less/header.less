@@ -27,7 +27,7 @@
 .Header__container {
   grid-column-start: 2;
   display: grid;
-  grid-template-columns: @logo-width auto @header-height @logo-width+@gap-size*2;
+  grid-template-columns: @logo-width auto @header-height;
   justify-items: end;
   grid-column-gap: @gap-size / 2;
 }
@@ -128,30 +128,4 @@
   position: absolute;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
   padding: 8px;
-}
-
-// Sponsor
-.Sponsor {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 @gap-size;
-}
-
-.Sponsor:hover {
-  color: hsla(0, 0, 100%, 0.5);
-  text-decoration: none;
-}
-
-.Sponsor__img {
-  width: @logo-width;
-}
-
-.Sponsor__text {
-  color: hsla(0, 0, 100%, 0.5);
-  width: @logo-width;
-  text-transform: uppercase;
-  margin: 0;
-  font-size: 9px;
-  text-align: center;
 }
