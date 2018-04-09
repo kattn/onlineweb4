@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 
 from django.conf.urls import url
-
+from apps.api.utils import SharedAPIRootRouter
 from apps.profiles import views
 
 urlpatterns = [
@@ -40,3 +40,7 @@ urlpatterns = [
     # Profile index with active tab.
     url(r'^(?P<active_tab>\w+)/$', views.index, name='profiles_active'),
 ]
+
+# API v1
+router = SharedAPIRootRouter()
+router.register(r'profile', views.UserViewSet, base_name='profile')

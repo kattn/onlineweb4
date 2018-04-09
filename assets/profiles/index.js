@@ -1,15 +1,12 @@
-import { loadCityFromZipCode } from 'common/utils/';
-import enableUserSearch from './userSearch';
-import './profiles';
+import React from 'react';
+import ReactDom from 'react-dom';
+import App from './containers/App';
 import './less/profiles.less';
 
-const zipCodeElement = document.getElementById('zip-code');
-if (zipCodeElement) {
-  const cityElement = document.getElementById('city');
-  loadCityFromZipCode(zipCodeElement, cityElement);
-}
+require('es6-promise').polyfill();
+require('isomorphic-fetch');
 
-const userSearchElement = document.getElementById('user-search');
-if (userSearchElement) {
-  enableUserSearch();
-}
+ReactDom.render(
+  <App />,
+  document.getElementById('profile'),
+);

@@ -36,6 +36,15 @@ from apps.profiles.models import Privacy
 from apps.shop.models import Order
 from utils.shortcuts import render_json
 
+# API v1
+from rest_framework import mixins, viewsets
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny
+
+from apps.authentication.models import OnlineUser as User
+from apps.profiles.serializers import UserSerializer
+
+
 
 """
 Index for the entire user profile view
@@ -547,3 +556,10 @@ class GSuiteResetPassword(View):
             messages.error(request, err)
 
         return redirect('profile_add_email')
+
+class UserViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def get_object(self):
+        return self.request.user
