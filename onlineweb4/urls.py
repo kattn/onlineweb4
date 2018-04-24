@@ -8,6 +8,7 @@ from django_js_reverse.views import urls_js
 from django_nyt.urls import get_pattern as get_notify_pattern
 from onlineweb4 import views
 from wiki.urls import get_pattern as get_wiki_pattern
+from graphene_django.views import GraphQLView
 
 # URL config
 admin.autodiscover()
@@ -218,6 +219,11 @@ if 'feedme' in settings.INSTALLED_APPS:
 if 'apps.payment' in settings.INSTALLED_APPS:
     urlpatterns += [
         url(r'^payment/',           include('apps.payment.urls')),
+    ]
+
+if 'graphene_django' in settings.INSTALLED_APPS:
+    urlpatterns += [
+        url(r'^graphql', GraphQLView.as_view(graphiql=True)),
     ]
 
 # redwine

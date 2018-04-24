@@ -1,32 +1,14 @@
-from apps.authentication.models import OnlineUser as User
+from apps.profiles.models import Privacy
 from rest_framework import serializers
 
-class UserSerializer(serializers.HyperlinkedModelSerializer):
+class PrivacySerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
+        model = Privacy
         fields = (
-            'url',
-            'username',
-            'email',
-            'groups',
-            'field_of_study',
-            'started_date',
-            'compiled',
-            'infomail',
-            'jobmail',
-            'online_mail',
-            'phone_number',
-            'address',
-            'zip_code',
-            'allergies',
-            'mark_rules',
-            'rfid',
-            'nickname',
-            'website',
-            'github',
-            'linkedin',
-            'gender',
-            'bio',
-            'saldo',
-            'ntnu_username'
+            'visible_for_other_users',
+            'expose_nickname',
+            'expose_email',
+            'expose_phone_number',
+            'expose_address',
+            'visible_as_attending_events',
         )

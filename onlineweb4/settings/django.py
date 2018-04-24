@@ -185,6 +185,7 @@ INSTALLED_APPS = (
     'webpack_loader',
     'oidc_provider',
     'raven.contrib.django.raven_compat',  # Sentry, error tracking
+    'graphene_django',
 
     # Django apps
     'django.contrib.admin',
@@ -258,3 +259,7 @@ AUTH_PASSWORD_VALIDATORS = [
         }
     }
 ]
+
+GRAPHENE = {
+    'SCHEMA': 'apps.profiles.schemas.PrivacySchema'
+}
