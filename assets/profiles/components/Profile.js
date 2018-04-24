@@ -1,15 +1,50 @@
 import React from 'react';
-import { Router, Route, Switch } from 'react-router';
-import createBrowserHistory from 'history/createBrowserHistory';
+import { Grid, Col, Row } from 'react-bootstrap';
 
-import Profile from '../components/Profile'
+import Header from './Header';
+import Name from './Name';
+import MedalsView from './MedalsView';
+import Infogroup from './InfoGroup';
+import Info from './Info';
+import Progress from './Progress';
+import IconInfo from './IconInfo';
+import InfoGroup from './InfoGroup';
 
-class App extends React.Component {
+const MEDALS = [
+  { committee: 'dotkom', position: 'medlem', range: '2015-2017' },
+  { committee: 'dotkom', position: 'økonomiansvarlig', range: '2017-2018' },
+  { committee: 'dotkom', position: 'nestleder', range: '2018-2019' },
+  { committee: 'prokom', position: 'redaktør', range: '2015-2018' },
+  { committee: 'hovedstyret', position: 'leder', range: '2038-0001' },
+]
+
+class Profile extends React.Component {
   constructor() {
     super();
 
     this.state = {
-        user: undefined
+        user: {
+          first_name: 'Ole Anders',
+          last_name: 'Stokker',
+          username: 'frozenlight',
+          ntnu_username: 'oleast',
+          kallenavn: 'oleast',
+          grade: 3,
+          primary_email: 'oleast@stud.ntnu.no',
+          gsuite_username: 'ole.anders.stokker',
+          phone_number: '47684466',
+          address: 'Odd Brochmanns Veg 57',
+          committees: [
+            { committee: 'dotkom', position: 'medlem', range: '2015-2018' },
+            { committee: 'dotkom', position: 'nestleder', range: '2018-2019' }
+          ],
+          external: {
+            github: 'https://github.com/oleast',
+            linkedin: 'https://linkedin.com/in/oleast',
+            homepage: 'https://stokkers.no'
+          }
+
+        }
     };
 
     this.API_URL = '/api/v1/users?format=json';
@@ -22,14 +57,36 @@ class App extends React.Component {
   }
 
   render() {
-      const { user } = this.state;
+    const { user } = this.state;
     return (
-      <div>
-          <p>Hello World</p>
-          <img class="profile-image" src="https://www.gravatar.com/avatar/f5ec9f0c82f584c4da9ebf44f2ad30f6?d=https%3A%2F%2Fonline.ntnu.no%2Fstatic%2Fimg%2Fprofile_default_male.png&s=286"></img>
-      </div>
+      <Grid>
+        <Header />
+        <Name name={`${user.first_name} ${user.last_name}`} />
+        <InfoGroup name="Navn" icon="names">
+          <Info type="NTNU Brukernavn" content={user.ntnu_username}/>
+          <Info type="Kallenavn" content={user.kallenavn}/>
+          <Info type="Brukernavn" content={user.username}/>
+        </InfoGroup>
+        <InfoGroup name="Studieprogresjon" icon="progress">
+          <Progress ongoingYear={user.grade} completedYear={user.grade - 1} />
+        </InfoGroup>
+        <InfoGroup name="Kontakt" icon="contact">
+          <Info type="Primær e-post" content={user.primary_email}/>
+          <Info type="Online e-post" content={`${user.gsuite_username}@online.ntnu.no`}/>
+          <Info type="Telefonnummer" content={user.phone_number}/>
+          <Info type="Adresse" content={user.address}/>
+        </InfoGroup>
+        <InfoGroup name="Komitéverv" icon="medal">
+          <MedalsView medals={user.committees} />
+        </InfoGroup>
+        <InfoGroup name="Eksterne Lenker" icon="external">
+          <IconInfo type="Github" content={user.external.github} />
+          <IconInfo type="Linkedin" content={user.external.linkedin} />
+          <IconInfo type="Hjemmeside" content={user.external.homepage} />
+        </InfoGroup>
+      </Grid>
     );
   }
 }
 
-export default App;
+export default Profile;
