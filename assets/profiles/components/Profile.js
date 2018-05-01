@@ -10,14 +10,6 @@ import Progress from './Progress';
 import IconInfo from './IconInfo';
 import InfoGroup from './InfoGroup';
 
-const MEDALS = [
-  { committee: 'dotkom', position: 'medlem', range: '2015-2017' },
-  { committee: 'dotkom', position: 'økonomiansvarlig', range: '2017-2018' },
-  { committee: 'dotkom', position: 'nestleder', range: '2018-2019' },
-  { committee: 'prokom', position: 'redaktør', range: '2015-2018' },
-  { committee: 'hovedstyret', position: 'leder', range: '2038-0001' },
-]
-
 class Profile extends React.Component {
   constructor() {
     super();
@@ -36,7 +28,9 @@ class Profile extends React.Component {
           address: 'Odd Brochmanns Veg 57',
           committees: [
             { committee: 'dotkom', position: 'medlem', range: '2015-2018' },
-            { committee: 'dotkom', position: 'nestleder', range: '2018-2019' }
+            { committee: 'dotkom', position: 'nestleder', range: '2018-2019' },
+            { committee: 'hovedstyret', position: 'leder', range: '2038-0001' },
+            { committee: 'prokom', position: 'redaktør', range: '2015-2018' },
           ],
           external: {
             github: 'https://github.com/oleast',
@@ -62,28 +56,30 @@ class Profile extends React.Component {
       <Grid>
         <Header />
         <Name name={`${user.first_name} ${user.last_name}`} />
-        <InfoGroup name="Navn" icon="names">
-          <Info type="NTNU Brukernavn" content={user.ntnu_username}/>
-          <Info type="Kallenavn" content={user.kallenavn}/>
-          <Info type="Brukernavn" content={user.username}/>
-        </InfoGroup>
-        <InfoGroup name="Studieprogresjon" icon="progress">
-          <Progress ongoingYear={user.grade} completedYear={user.grade - 1} />
-        </InfoGroup>
-        <InfoGroup name="Kontakt" icon="contact">
-          <Info type="Primær e-post" content={user.primary_email}/>
-          <Info type="Online e-post" content={`${user.gsuite_username}@online.ntnu.no`}/>
-          <Info type="Telefonnummer" content={user.phone_number}/>
-          <Info type="Adresse" content={user.address}/>
-        </InfoGroup>
-        <InfoGroup name="Komitéverv" icon="medal">
-          <MedalsView medals={user.committees} />
-        </InfoGroup>
-        <InfoGroup name="Eksterne Lenker" icon="external">
-          <IconInfo type="Github" content={user.external.github} />
-          <IconInfo type="Linkedin" content={user.external.linkedin} />
-          <IconInfo type="Hjemmeside" content={user.external.homepage} />
-        </InfoGroup>
+        <div>
+          <InfoGroup name="Navn" icon="names">
+            <Info type="NTNU Brukernavn" content={user.ntnu_username}/>
+            <Info type="Kallenavn" content={user.kallenavn}/>
+            <Info type="Brukernavn" content={user.username}/>
+          </InfoGroup>
+          <InfoGroup name="Studieprogresjon" icon="progress">
+            <Progress ongoingYear={user.grade} completedYear={user.grade - 1} />
+          </InfoGroup>
+          <InfoGroup name="Kontakt" icon="contact">
+            <Info type="Primær e-post" content={user.primary_email}/>
+            <Info type="Online e-post" content={`${user.gsuite_username}@online.ntnu.no`}/>
+            <Info type="Telefonnummer" content={user.phone_number}/>
+            <Info type="Adresse" content={user.address}/>
+          </InfoGroup>
+          <InfoGroup name="Komitéverv" icon="medal">
+            <MedalsView medals={user.committees} />
+          </InfoGroup>
+          <InfoGroup name="Eksterne Lenker" icon="external">
+            <IconInfo type="Github" content={user.external.github} />
+            <IconInfo type="Linkedin" content={user.external.linkedin} />
+            <IconInfo type="Hjemmeside" content={user.external.homepage} />
+          </InfoGroup>
+        </div>
       </Grid>
     );
   }
