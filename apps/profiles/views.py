@@ -41,7 +41,9 @@ from rest_framework import mixins, viewsets, generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 
-from apps.profiles.serializers import PrivacySerializer
+from apps.profiles.serializers import ProfileSerializer
+
+logger = logging.getLogger(__name__)
 
 """
 Index for the entire user profile view
@@ -82,8 +84,10 @@ class GSuiteResetPassword(View):
 class PrivacyViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.ListModelMixin):
     pass
     lookup_field = 'pk'
-    #queryset = Profile.objects.all()
-    serializer_class = PrivacySerializer
+    serializer_class = ProfileSerializer
 
     def get_queryset(self):
-        return Privacy.objects.all()
+        logger.debug(self.request.user)
+        user = self.request.user
+        queryset = [User.objects.get(username=user.username)]
+        return queryset
