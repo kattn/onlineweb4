@@ -3,6 +3,7 @@ import sys
 
 from decouple import config
 
+from apps.sso.settings import OAUTH2_SCOPES
 
 # Directory that contains this file.
 PROJECT_SETTINGS_DIRECTORY = os.path.dirname(globals()['__file__'])
@@ -50,23 +51,6 @@ USER_SEARCH_GROUPS = [
     24,  # itex
 ]
 
-#List of mailing lists, used in update_sympa_memcache_from_sql.py
-PUBLIC_LISTS = [
-    "foreninger",
-    "linjeforeninger",
-    "gloshaugen",
-    "dragvoll",
-    "masterforeninger",
-    "kjellere",
-    "linjeledere",
-    "linjeredaksjoner",
-    "glosfaddere",
-    "sr-samarbeid",
-    "ivt-samarbeid",
-    "linjekor",
-    "studentdemokratiet"
-]
-
 # Slack inviter
 SLACK_INVITER = {
     # e.g. onlinentnu
@@ -77,7 +61,6 @@ SLACK_INVITER = {
 }
 
 # SSO / OAuth2 settings
-from apps.sso.settings import OAUTH2_SCOPES
 OAUTH2_PROVIDER = {
     'SCOPES': OAUTH2_SCOPES,
     'ACCESS_TOKEN_EXPIRE_SECONDS': 3600,
@@ -115,7 +98,7 @@ IMPORT_DDF_MODELS = False
 
 # Django CORS headers
 CORS_ORIGIN_ALLOW_ALL = config("OW4_DJANGO_CORS_ORIGIN_ALLOW_ALL", cast=bool, default=True)
-CORS_URLS_REGEX = r'^(/api/v1/.*|/sso/user/)$' # Enables CORS on /api/v1/ endpoints and the /sso/user/ endpoint
+CORS_URLS_REGEX = r'^(/api/v1/.*|/sso/user/|/openid/.*)$' # Enables CORS on all /api/v1/, /sso/user/ and all /openid/ endpoints 
 
 
 # Google reCaptcha settings
@@ -124,3 +107,8 @@ RECAPTCHA_PUBLIC_KEY = config("OW4_DJANGO_RECAPTCHA_PUBLIC_KEY", default='6LfV9j
 RECAPTCHA_PRIVATE_KEY = config("OW4_DJANGO_RECAPTCHA_PRIVATE_KEY", default='6LfV9jkUAAAAABlc4-q01vMsBNv3-Gsp75G8Zd5N')
 NOCAPTCHA = config("OW4_DJANGO_NOCAPTCHA", cast=bool, default=True)
 RECAPTCHA_USE_SSL = config("OW4_DJANGO_RECAPTCHA_USE_SSL", cast=bool, default=True)
+
+
+# oidc_provider - OpenID Connect Provider
+OIDC_USERINFO = 'apps.oidc_provider.claims.userinfo'
+OIDC_EXTRA_SCOPE_CLAIMS = 'apps.oidc_provider.claims.Onlineweb4ScopeClaims'

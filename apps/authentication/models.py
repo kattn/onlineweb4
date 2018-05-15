@@ -14,6 +14,8 @@ from django.utils.translation import ugettext as _
 
 # If this list is changed, remember to check that the year property on
 # OnlineUser is still correct!
+from apps.authentication.validators import validate_rfid
+
 FIELD_OF_STUDY_CHOICES = [
     (0, _('Gjest')),
     (1, _('Bachelor i Informatikk')),
@@ -26,6 +28,7 @@ FIELD_OF_STUDY_CHOICES = [
     (15, _('Helseinformatikk')),
     (16, _('Interaksjonsdesign, spill- og læringsteknologi')),
     (30, _('Annen mastergrad')),
+    (40, _('Sosialt medlem')),
     (80, _('PhD')),
     (90, _('International')),
     (100, _('Annet Onlinemedlem')),
@@ -73,13 +76,36 @@ def get_length_of_field_of_study(field_of_study):
         return 3
     elif 10 <= field_of_study <= 30:  # 10-30 is considered master
         return 2
+    elif field_of_study == 40:  # social
+        return 1
     elif field_of_study == 80:  # phd
-        return 3
+        return 99
     elif field_of_study == 90:  # international
         return 1
     # If user's field of study is not matched by any of these tests, return -1
     else:
         return 0
+
+
+def get_start_of_field_of_study(field_of_study):
+    """
+    Returns start year of a field of study
+    """
+    if field_of_study == 0 or field_of_study == 100:  # others
+        return 0
+    elif field_of_study == 1:  # bachelor
+        return 0
+    elif 10 <= field_of_study <= 30:  # 10-30 is considered master
+        return 3
+    elif field_of_study == 40:  # social
+        return 0
+    elif field_of_study == 80:  # phd
+        return 5
+    elif field_of_study == 90:  # international
+        return 0
+    # If user's field of study is not matched by any of these tests, return -1
+    else:
+        return -1
 
 
 class OnlineUser(AbstractUser):
@@ -105,7 +131,7 @@ class OnlineUser(AbstractUser):
     # Other
     allergies = models.TextField(_("allergier"), blank=True, null=True)
     mark_rules = models.BooleanField(_("godtatt prikkeregler"), default=False)
-    rfid = models.CharField(_("RFID"), max_length=50, blank=True, null=True)
+    rfid = models.CharField(_("RFID"), max_length=50, unique=True, blank=True, null=True, validators=[validate_rfid])
     nickname = models.CharField(_("nickname"), max_length=50, blank=True, null=True)
     website = models.URLField(_("hjemmeside"), blank=True, null=True)
     github = models.URLField(_("github"), blank=True, null=True)
@@ -187,33 +213,16 @@ class OnlineUser(AbstractUser):
 
     @property
     def year(self):
+        start_year = get_start_of_field_of_study(self.field_of_study)
+        length_of_study = get_length_of_field_of_study(self.field_of_study)
         today = timezone.now().date()
         started = self.started_date
 
-        # We say that a year is 360 days incase we are a bit slower to
+        # We say that a year is 360 days in case we are a bit slower to
         # add users one year.
-        year = ((today - started).days // 360) + 1
+        years_passed = ((today - started).days // 360) + 1
 
-        if self.field_of_study == 0 or self.field_of_study == 100:  # others
-            return 0
-        # dont return a bachelor student as 4th or 5th grade
-        elif self.field_of_study == 1:  # bachelor
-            if year > 3:
-                return 3
-            return year
-        elif 10 <= self.field_of_study <= 30:  # 10-30 is considered master
-            if year >= 2:
-                return 5
-            return 4
-        elif self.field_of_study == 80:  # phd
-            return year + 5
-        elif self.field_of_study == 90:  # international
-            if year == 1:
-                return 1
-            return 4
-        # If user's field of study is not matched by any of these tests, return -1
-        else:
-            return -1
+        return min(start_year + years_passed, start_year + length_of_study)
 
     @models.permalink
     def get_absolute_url(self):
@@ -250,6 +259,12 @@ class OnlineUser(AbstractUser):
         gravatar_url = "https://www.gravatar.com/avatar/" + hashlib.md5(self.email.encode('utf-8')).hexdigest() + "?"
         gravatar_url += urllib.parse.urlencode({'d': default, 's': str(size)})
         return gravatar_url
+
+    def get_visible_as_attending_events(self):
+        """ Returns the default value of visible_as_attending_events set in privacy/personvern """
+        if hasattr(self, 'privacy'):
+            return self.privacy.visible_as_attending_events
+        return False
 
     class Meta(object):
         ordering = ['first_name', 'last_name']

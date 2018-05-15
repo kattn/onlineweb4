@@ -4,8 +4,8 @@ from django.contrib import admin
 from django.contrib.contenttypes.admin import GenericStackedInline
 from reversion.admin import VersionAdmin
 
-from apps.payment.models import (Payment, PaymentDelay, PaymentPrice, PaymentRelation,
-                                 PaymentTransaction)
+from apps.payment.models import (Payment, PaymentDelay, PaymentPrice, PaymentReceipt,
+                                 PaymentRelation, PaymentTransaction)
 from utils.admin import DepositWithdrawalFilter
 
 
@@ -32,18 +32,29 @@ class PaymentPriceInline(admin.StackedInline):
 class PaymentAdmin(VersionAdmin):
     inlines = (PaymentPriceInline, )
     model = Payment
-    list_display = ('__str__', 'stripe_key', 'payment_type')
+    list_display = ('__str__', 'active', 'payment_type', 'deadline', 'delay', 'stripe_key')
+    list_filter = ['active', 'stripe_key', 'payment_type']
 
 
 class PaymentRelationAdmin(VersionAdmin):
     model = PaymentRelation
-    list_display = ('__str__', 'refunded')
+    list_display = ('payment', 'user', 'datetime', 'refunded')
+    list_filter = ['refunded']
+    search_fields = ['user__first_name', 'user__last_name', 'user__username', 'user__ntnu_username']
     exclude = ('stripe_id',)
 
 
 class PaymentDelayAdmin(VersionAdmin):
     model = PaymentDelay
     list_display = ('__str__', 'valid_to', 'active')
+    search_fields = ['user__first_name', 'user__last_name', 'user__username', 'user__ntnu_username']
+    list_filter = ['active']
+
+
+class PaymentReceiptAdmin(admin.ModelAdmin):
+    model = PaymentReceipt
+    list_display = ('receipt_id',)
+    search_fields = ['receipt_id']
 
 
 class PaymentTransactionAdmin(VersionAdmin):
@@ -52,6 +63,7 @@ class PaymentTransactionAdmin(VersionAdmin):
     list_filter = ('used_stripe', DepositWithdrawalFilter)
 
 
+admin.site.register(PaymentReceipt, PaymentReceiptAdmin)
 admin.site.register(Payment, PaymentAdmin)
 admin.site.register(PaymentRelation, PaymentRelationAdmin)
 admin.site.register(PaymentDelay, PaymentDelayAdmin)

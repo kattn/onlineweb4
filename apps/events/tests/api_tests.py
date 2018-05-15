@@ -1,26 +1,23 @@
-from datetime import timedelta
+import json
 
 from django.core.urlresolvers import reverse
-from django.utils import timezone
 from django_dynamic_fixture import G
-from oauth2_provider.models import (get_access_token_model, get_application_model, get_grant_model,
-                                    get_refresh_token_model)
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.authentication.models import OnlineUser
+from apps.oauth2_provider.test import OAuth2TestCase
 
 from .utils import attend_user_to_event, generate_event
-
-Application = get_application_model()
-Grant = get_grant_model()
-AccessToken = get_access_token_model()
-RefreshToken = get_refresh_token_model()
 
 
 def generate_attendee(event, username, rfid):
     user = G(OnlineUser, username=username, rfid=rfid)
     return attend_user_to_event(event, user)
+
+
+def generate_valid_rfid():
+    return '12345678'
 
 
 class EventsAPIURLTestCase(APITestCase):
@@ -48,23 +45,12 @@ class EventsAPIURLTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
-class AttendAPITestCase(APITestCase):
+class AttendAPITestCase(OAuth2TestCase):
+    scopes = ['read', 'write', 'regme.readwrite']
+
     def setUp(self):
         self.user = G(OnlineUser, name='test_user')
-        self.application = Application.objects.create(
-            name='test_client', user=self.user,
-            client_type=Application.CLIENT_CONFIDENTIAL,
-            authorization_grant_type=Application.GRANT_CLIENT_CREDENTIALS,
-            scopes='read write regme.readwrite',
-            redirect_uris='http://localhost',
-        )
-        self.application.save()
-        self.access_token = AccessToken.objects.create(
-            user=self.user, token='1234567890',
-            application=self.application, scope='read write regme.readwrite',
-            expires=timezone.now() + timedelta(days=1)
-        )
-        self.access_token.save()
+        self.access_token = self.generate_access_token(self.user)
         self.headers = {
             'format': 'json',
             'HTTP_AUTHORIZATION': 'Bearer ' + self.access_token.token,
@@ -204,3 +190,50 @@ class AttendAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()['attend_status'], 10)
+
+    def test_api_does_not_try_to_get_user_by_rfid_empty_string(self):
+        self.event.attendance_event.max_capacity = 2
+        self.event.attendance_event.save()
+
+        response = self.client.post(self.url, {
+            'event': self.event.id,
+            'rfid': '',
+        }, **self.headers)
+
+        self.refresh_attendees()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.attendees[0].attended)
+        self.assertFalse(self.attendees[1].attended)
+        self.assertEqual(response.json()['attend_status'], 41)
+
+    def test_save_rfid_give_no_username_gives_useful_error_message(self):
+        self.attendee1.user.rfid = None
+        self.attendee1.user.save()
+
+        response = self.client.post(self.url, json.dumps({
+            'event': self.event.id,
+            'rfid': self.attendee1.user.rfid,
+        }), content_type='application/json', **self.headers)
+
+        self.refresh_attendees()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.attendees[0].attended)
+        self.assertEqual(response.json()['attend_status'], 41)
+
+    def test_save_rfid_gives_useful_error_message_if_rfid_already_exists(self):
+        rfid = generate_valid_rfid()
+        self.attendee1.user.rfid = None
+        self.attendee1.user.save()
+        self.attendee2.user.rfid = rfid
+        self.attendee2.user.save()
+
+        response = self.client.post(self.url, json.dumps({
+            'event': self.event.id,
+            'username': self.attendee1.user.username,
+            'rfid': rfid,
+        }), content_type='application/json', **self.headers)
+
+        self.refresh_attendees()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.attendees[0].attended)
+        self.assertEqual(response.json()['attend_status'], 51)

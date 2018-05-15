@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.core.signing import Signer
 from django.core.urlresolvers import reverse
+from django.db import IntegrityError
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -120,6 +123,7 @@ def attendEvent(request, event_id):
         attendee = Attendee(event=attendance_event, user=request.user)
         if 'note' in form.cleaned_data:
             attendee.note = form.cleaned_data['note']
+        attendee.show_as_attending_event = request.user.get_visible_as_attending_events()
         attendee.save()
         messages.success(request, _("Du er nå meldt på arrangementet."))
 
@@ -176,7 +180,6 @@ def unattendEvent(request, event_id):
         for delay in delays:
             delay.delete()
 
-    event.attendance_event.notify_waiting_list(host=request.META['HTTP_HOST'], unattended_user=request.user)
     Attendee.objects.get(event=attendance_event, user=request.user).delete()
 
     messages.success(request, _("Du ble meldt av arrangementet."))
@@ -260,7 +263,7 @@ def generate_json(request, event_id):
         messages.error(request, _('Du har ikke tilgang til listen for dette arrangementet. hei'))
         return redirect(event)
 
-    attendee_unsorted = event.attendance_event.attendees_qs
+    attendee_unsorted = event.attendance_event.attending_attendees_qs
     attendee_sorted = sorted(attendee_unsorted, key=lambda attendee: attendee.user.last_name)
     waiters = event.attendance_event.waitlist_qs
     reserve = event.attendance_event.reservees_qs
@@ -329,7 +332,7 @@ def mail_participants(request, event_id):
         messages.error(request, _('Du har ikke tilgang til å vise denne siden.'))
         return redirect(event)
 
-    all_attendees = list(event.attendance_event.attendees_qs)
+    all_attendees = list(event.attendance_event.attending_attendees_qs)
     attendees_on_waitlist = list(event.attendance_event.waitlist_qs)
     attendees_not_paid = list(event.attendance_event.attendees_not_paid)
 
@@ -351,6 +354,28 @@ def mail_participants(request, event_id):
     })
 
 
+@login_required
+def toggleShowAsAttending(request, event_id):
+    event = get_object_or_404(Event, pk=event_id)
+
+    if not event.is_attendance_event():
+        messages.error(request, _("Dette er ikke et påmeldingsarrangement."))
+        return redirect(event)
+
+    attendance_event = event.attendance_event
+    attendee = Attendee.objects.get(event=attendance_event, user=request.user)
+
+    if (attendee.show_as_attending_event):
+        attendee.show_as_attending_event = False
+        messages.success(request, _("Du er ikke lenger synlig som påmeldt dette arrangementet."))
+    else:
+        attendee.show_as_attending_event = True
+        messages.success(request, _("Du er nå synlig som påmeldt dette arrangementet."))
+
+    attendee.save()
+    return redirect(event)
+
+
 class EventViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.ListModelMixin):
     serializer_class = EventSerializer
     permission_classes = (AllowAny,)
@@ -362,7 +387,7 @@ class EventViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.Li
     def get_queryset(self):
         """
         :return: Queryset filtered by these requirements:
-        - event has NO group restriction OR user having access to restricted event
+            event has NO group restriction OR user having access to restricted event
         """
         return Event.by_registration.filter(
             Q(group_restriction__isnull=True) | Q(group_restriction__groups__in=self.request.user.groups.all())). \
@@ -395,12 +420,15 @@ class AttendViewSet(views.APIView):
     permission_classes = [TokenHasScope]
     required_scopes = ['regme.readwrite']
 
-    def post(self, request, format=None):
+    @staticmethod
+    def _validate_attend_params(rfid, username):
+        logger = logging.getLogger(__name__)
 
-        rfid = request.data.get('rfid')
-        event = request.data.get('event')
-        username = request.data.get('username')
-        waitlist_approved = request.data.get('approved')
+        if not (username or rfid):
+            return {
+                'message': 'Mangler både RFID og brukernavn. Vennligst prøv igjen.',
+                'attend_status': 41,
+            }
 
         # If attendee has typed in username to bind a new card to their user
         if username is not None and rfid is not None:
@@ -408,19 +436,66 @@ class AttendViewSet(views.APIView):
                 user = User.objects.get(username=username)
                 user.rfid = rfid
                 user.save()
+                logger.debug('Storing new RFID to user "%s"' % user, extra={
+                    'user': user.pk,
+                    'rfid': rfid,
+                })
             except User.DoesNotExist:
-                return Response({'message': 'Brukernavnet finnes ikke. Husk at det er et online.ntnu.no brukernavn! '
-                                            '(Prøv igjen, eller scan nytt kort for å avbryte.)', 'attend_status': 50},
-                                status=status.HTTP_400_BAD_REQUEST)
+                return {
+                    'message': 'Brukernavnet finnes ikke. Husk at det er et online.ntnu.no brukernavn! '
+                               '(Prøv igjen, eller scan nytt kort for å avbryte.)',
+                    'attend_status': 50,
+                }
+            except (IntegrityError, ValidationError):
+                logger.error('Could not store RFID information for username "{}" with RFID "{}".'.format(
+                    username, rfid,
+                ))
+                return {
+                    'message': 'Det oppstod en feil da vi prøvde å lagre informasjonen. Vennligst prøv igjen. '
+                               'Dersom problemet vedvarer, ta kontakt med dotkom. '
+                               'Personen kan registreres med brukernavn i steden for RFID.',
+                    'attend_status': 51,
+                }
+
+        return {}
+
+    def post(self, request, format=None):
+        logger = logging.getLogger(__name__)
+
+        rfid = request.data.get('rfid')
+        event = request.data.get('event')
+        username = request.data.get('username')
+        waitlist_approved = request.data.get('approved')
+
+        error = self._validate_attend_params(rfid, username)
+        if 'message' in error and 'attend_status' in error:
+            return Response({'message': error.get('message'), 'attend_status': error.get('attend_status')},
+                            status=status.HTTP_400_BAD_REQUEST
+                            )
+
         try:
             # If attendee is trying to attend by username
-            if rfid is None:
+            if not rfid:
+                logger.debug('Retrieving attendee by username', extra={
+                    'event': event,
+                    'username': username,
+                    'rfid': rfid,
+                })
                 attendee = Attendee.objects.get(event=event, user__username=username)
             else:
+                logger.debug('Retrieving attendee by rfid', extra={
+                    'event': event,
+                    'username': username,
+                    'rfid': rfid,
+                })
                 attendee = Attendee.objects.get(event=event, user__rfid=rfid)
 
             # If attendee is already marked as attended
             if attendee.attended:
+                logger.debug('Attendee already marked as attended.', extra={
+                    'user': attendee.user.id,
+                    'event': event,
+                })
                 return Response({'message': (attendee.user.get_full_name() +
                                              ' har allerede registrert oppmøte.'), 'attend_status': 20},
                                 status=status.HTTP_400_BAD_REQUEST)

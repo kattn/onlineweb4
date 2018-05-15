@@ -1,5 +1,6 @@
 {% load render_bundle from webpack_loader %}
 {% load raven %}
+ {% load sekizai_tags %}
 
 <!DOCTYPE html>
 <html>
@@ -22,6 +23,7 @@
     {% render_bundle 'core' 'css' %}
     {% block scripts %}
     {% endblock %}
+    {% render_block "css" %}
     {% block apple-webapp %}{% endblock %}
 </head>
 <body>
@@ -115,10 +117,11 @@
             </ul>
 
             <div id="main-sponsor">
-                <a href="http://www.soprasteria.no/" id="ms-ref">
-                    <img class="ms-img" src="{{ STATIC_URL }}img/soprasteria.svg" alt="Hovedsamarbeidspartner - Sopra Steria">
+		        <a href="http://www.knowit.no/" id="ms-ref">
+                    <img class="ms-img" src="{{ STATIC_URL }}img/knowit.svg" alt="Hovedsamarbeidspartner - Knowit">
                 </a>
                 <span class="ms-span">Hovedsamarbeidspartner</span>
+
             </div>
             </ul>
         </div>
@@ -197,7 +200,7 @@
                             <div class="address">
                                 <div class="address-heading">Besøksadresse <span class="glyphicon glyphicon-map-marker"></span></div>
                                 <div class="address-info">
-                                    Rom 303<br>
+                                    Rom 503<br>
                                     Høgskoleringen 3<br>
                                     NTNU Gløshaugen
                                 </div>
@@ -236,6 +239,7 @@
         {% render_bundle 'common' 'js' %}
         {% render_bundle 'core' 'js' %}
     {% endblock %}
+    {% render_block "js" %}
 
     {% if GOOGLE_ANALYTICS_KEY %}
         <script type="text/javascript">

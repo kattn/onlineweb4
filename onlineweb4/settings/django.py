@@ -8,7 +8,6 @@ from django.contrib.messages import constants as messages
 
 from .base import PROJECT_ROOT_DIRECTORY, PROJECT_SETTINGS_DIRECTORY
 
-
 TEST_RUNNER = config("OW4_DJANGO_TEST_RUNNER", default="django_nose.NoseTestSuiteRunner")
 
 DEBUG = config("OW4_DJANGO_DEBUG", cast=bool, default=True)
@@ -41,6 +40,7 @@ EMAIL_ITEX = 'itex@online.ntnu.no'
 EMAIL_OPPTAK='opptak@online.ntnu.no'
 EMAIL_PROKOM = 'prokom@online.ntnu.no'
 EMAIL_TRIKOM = 'trikom@online.ntnu.no'
+EMAIL_XSPORT = 'x-sport@online.ntnu.no'
 
 EMAIL_BACKEND = config("OW4_DJANGO_EMAIL_BACKEND", default='django.core.mail.backends.console.EmailBackend')
 

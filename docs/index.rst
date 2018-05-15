@@ -9,6 +9,8 @@ Welcome to onlineweb4's documentation!
 .. toctree::
     :maxdepth: 2
 
+    approval/index
+    article/index
     authentication/index
     careeropportunity/index
     companyprofile/index
@@ -32,6 +34,7 @@ Welcome to onlineweb4's documentation!
     splash/index
     sso/index
     webshop/index
+    testing/index
 
 
 Indices and tables

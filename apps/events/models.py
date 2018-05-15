@@ -2,13 +2,13 @@
 
 from collections import OrderedDict
 from datetime import datetime, timedelta
-from functools import reduce
+from random import choice as random_choice
 
 from django.conf import settings
 from django.contrib.auth.models import Group
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericRelation
 from django.core import validators
-from django.core.exceptions import ValidationError
+from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist, ValidationError
 from django.db import models
 from django.db.models import SET_NULL, Case, Q, Value, When
 from django.template.defaultfilters import slugify
@@ -19,6 +19,7 @@ from unidecode import unidecode
 
 from apps.authentication.models import FIELD_OF_STUDY_CHOICES
 from apps.companyprofile.models import Company
+from apps.feedback.models import FeedbackRelation
 from apps.gallery.models import ResponsiveImage
 from apps.marks.models import get_expiration_date
 
@@ -80,34 +81,39 @@ class Event(models.Model):
 
     author = models.ForeignKey(User, related_name='oppretter', null=True, blank=True)
     title = models.CharField(_('tittel'), max_length=60)
+    """Event title"""
     event_start = models.DateTimeField(_('start-dato'))
+    """Datetime for event start"""
     event_end = models.DateTimeField(_('slutt-dato'))
+    """Datetime for event end"""
     location = models.CharField(_('lokasjon'), max_length=100)
+    """Event location"""
     ingress_short = models.CharField(_("kort ingress"), max_length=150,
-                                     validators=[validators.MinLengthValidator(25)])
-    ingress = models.TextField(_('ingress'), validators=[validators.MinLengthValidator(25)])
+                                     validators=[validators.MinLengthValidator(25)],
+                                     help_text='En kort ingress som blir vist på forsiden')
+    """Short ingress used on the frontpage"""
+    ingress = models.TextField(_('ingress'), validators=[validators.MinLengthValidator(25)],
+                               help_text='En ingress som blir vist før beskrivelsen.')
+    """Ingress used in archive and details page"""
     description = models.TextField(_('beskrivelse'), validators=[validators.MinLengthValidator(45)])
+    """Event description shown on details page"""
     image = models.ForeignKey(ResponsiveImage, related_name='events', blank=True, null=True, on_delete=SET_NULL)
+    """Event image"""
     event_type = models.SmallIntegerField(_('type'), choices=TYPE_CHOICES, null=False)
+    """Event type. Used mainly for filtering"""
     organizer = models.ForeignKey(Group, verbose_name=_('arrangør'), blank=True, null=True, on_delete=SET_NULL)
+    """Committee responsible for organizing the event"""
+
+    feedback = GenericRelation(FeedbackRelation)
 
     def is_attendance_event(self):
         """ Returns true if the event is an attendance event """
-        try:
-            return True if self.attendance_event else False
-        except AttendanceEvent.DoesNotExist:
-            return False
-
-    def images(self):
-        if not self.old_image:
-            return []
-        from apps.events.utils import find_image_versions
-        return find_image_versions(self.old_image)
+        return hasattr(self, 'attendance_event')
 
     # TODO move payment and feedback stuff to attendance event when dasboard is done
 
     def feedback_users(self):
-        if self.is_attendance_event:
+        if self.is_attendance_event():
             return [a.user for a in self.attendance_event.attendees.filter(attended=True)]
         return []
 
@@ -128,10 +134,7 @@ class Event(models.Model):
 
     @property
     def company_event(self):
-        try:
-            return CompanyEvent.objects.filter(event=self)
-        except CompanyEvent.DoesNotExist:
-            return None
+        return CompanyEvent.objects.filter(event=self)
 
     def feedback_mail(self):
         if self.event_type == 1 or self.event_type == 4:  # Sosialt & Utflukt
@@ -146,18 +149,12 @@ class Event(models.Model):
             return settings.DEFAULT_FROM_EMAIL
 
     def can_display(self, user):
-        restriction = GroupRestriction.objects.filter(event=self)
-
+        restriction = GroupRestriction.objects.filter(event=self).first()
         if not restriction:
             return True
-
         if not user:
             return False
-
-        groups = restriction[0].groups
-
-        # returns True if any of the users groups are in one of the accepted groups
-        return any(group in user.groups.all() for group in groups.all())
+        return restriction.has_access(user)
 
     @property
     def slug(self):
@@ -419,69 +416,59 @@ class AttendanceEvent(models.Model):
     # Extra choices
     extras = models.ManyToManyField(Extras, blank=True)
 
+    payments = GenericRelation('payment.Payment')
+
+    @property
+    def feedback(self):
+        """Proxy for generic feedback relation on event"""
+        return self.event.feedback
+
     def get_feedback(self):
-        from apps.feedback.models import FeedbackRelation
-        try:
-            feedback = FeedbackRelation.objects.get(content_type=ContentType.objects.get_for_model(Event),
-                                                    object_id=self.pk)
-        except FeedbackRelation.DoesNotExist:
-            feedback = None
-        return feedback
+        return self.feedback.first()
 
     def has_feedback(self):
-        return bool(self.get_feedback())
+        return self.feedback.exists()
 
     @property
     def has_reservation(self):
-        """ Returns whether this event has an attached reservation """
-        try:
-            return True if self.reserved_seats else False
-        except Reservation.DoesNotExist:
-            return False
+        """Returns whether this event has an attached reservation """
+        return hasattr(self, 'reserved_seats')
 
     @property
     def has_extras(self):
-        return bool(self.extras.exists())
+        return self.extras.exists()
 
     @property
-    def attendees_qs(self):
-        """ Queryset with all attendees not on waiting list """
-        return self.attendees.all()[:self.max_capacity - self.number_of_reserved_seats]
+    def attending_attendees_qs(self):
+        """Queryset with all attendees not on waiting list """
+        return self.attendees.all()[:self.number_of_attendee_seats]
 
     def not_attended(self):
-        """ Queryset with all attendees not attended """
-        # .filter does apperantly not work on sliced querysets
-        # return self.attendees_qs.filter(attended=False)
-
-        not_attended = []
-
-        for attendee in self.attendees_qs:
-            if not attendee.attended:
-                not_attended.append(attendee.user)
-
-        return not_attended
+        """List of all attending attendees who have not attended"""
+        return [a.user for a in self.attending_attendees_qs if not a.attended]
 
     @property
     def waitlist_qs(self):
-        """ Queryset with all attendees in waiting list """
-        return self.attendees.all()[self.max_capacity - self.number_of_reserved_seats:]
+        """Queryset with all attendees on waiting list """
+        return self.attendees.all()[self.number_of_attendee_seats:]
 
     @property
     def reservees_qs(self):
-        """ Queryset with all reserved seats which have been filled """
+        """Queryset with all reserved seats which have been filled """
         if self.has_reservation:
             return self.reserved_seats.reservees.all()
         return []
 
     @property
     def attendees_not_paid(self):
+        """List of attendees who haven't paid"""
         return list(self.attendees.filter(paid=False))
 
     @property
     def number_of_attendees(self):
         """ Count of all attendees not in waiting list """
         # We need to use len() instead of .count() here, because of the prefetched event archive
-        return len(self.attendees_qs)
+        return len(self.attending_attendees_qs)
 
     @property
     def number_on_waitlist(self):
@@ -490,24 +477,23 @@ class AttendanceEvent(models.Model):
         return len(self.waitlist_qs)
 
     @property
+    def number_of_attendee_seats(self):
+        """Return the number of seats which can be used for attendees"""
+        return self.max_capacity - self.number_of_reserved_seats
+
+    @property
     def number_of_reserved_seats(self):
-        """
-        Total number of seats for this event that are reserved
-        """
+        """Total number of seats for this event that are reserved"""
         return self.reserved_seats.seats if self.has_reservation else 0
 
     @property
     def number_of_reserved_seats_taken(self):
-        """
-        Returns number of reserved seats which have been filled
-        """
+        """Returns number of reserved seats which have been filled"""
         return self.reserved_seats.number_of_seats_taken if self.has_reservation else 0
 
     @property
     def number_of_seats_taken(self):
-        """
-        Returns the total amount of taken seats for an attendance_event.
-        """
+        """Returns the total amount of taken seats for an attendance_event."""
         # This includes all attendees + reserved seats for the event, if any.
         # Always use the total number of reserved seats here, because they are not
         # available for regular users to claim.
@@ -515,21 +501,34 @@ class AttendanceEvent(models.Model):
 
     @property
     def free_seats(self):
-        """
-        Integer representing the number of free seats for an event
-        """
+        """Integer representing the number of free seats for an event"""
         return 0 if self.number_of_seats_taken == self.max_capacity else self.max_capacity - self.number_of_seats_taken
 
     @property
     def room_on_event(self):
-        """
-        Returns True if there are free seats or an open waiting list
-        """
+        """Returns True if there are free seats or an open waiting list"""
         return True if self.free_seats > 0 or self.waitlist else False
 
     @property
     def registration_open(self):
         return timezone.now() < self.registration_start
+
+    @property
+    def visible_attending_attendees(self):
+        """ List with all attendees whom want to be displayed as attending else return a anonymous name """
+        dyr = ['piggsvin', 'kjøttmeis', 'flaggermus', 'elg', 'villsvin', 'rådyr', 'moskus', 'narhval',
+               'spekkhogger', 'gaupe', 'ekorn', 'kanin', 'lemen', 'neshorn', 'ørn', 'gullfisk', 'kodiakbjørn',
+               'hacker', 'stol', 'bever', 'datamaskin', 'piano', 'strykejern', 'samurai', 'laks', 'server']
+
+        visible_attendees = []
+        for attendee in self.attending_attendees_qs:
+            user = attendee.user
+            visible = attendee.show_as_attending_event
+            f_name, l_name = [user.first_name, user.last_name] if visible else ['Anonym ' + random_choice(dyr), '']
+            year = '{} klasse'.format(user.year)
+            visible_attendees.append({'visible': visible, 'first_name': f_name, 'last_name': l_name, 'year': year})
+
+        return sorted(visible_attendees, key=lambda attendee: attendee['visible'], reverse=True)
 
     def has_delayed_signup(self, user):
         pass
@@ -565,45 +564,24 @@ class AttendanceEvent(models.Model):
     def waitlist_enabled(self):
         return self.waitlist
 
-    def payment(self):
-        # Importing here to awoid circular dependency error
-        from apps.payment.models import Payment
-        try:
-            payment = Payment.objects.get(content_type=ContentType.objects.get_for_model(AttendanceEvent),
-                                          object_id=self.event.id)
-        except Payment.DoesNotExist:
-            payment = None
-
-        return payment
-
-    def notify_waiting_list(self, host, unattended_user=None, extra_capacity=1):
+    def bump_waitlist_for_x_users(self, extra_capacity=1):
+        """Handle bumping of the x first users on the waitlist"""
         from apps.events.utils import handle_waitlist_bump  # Imported here to avoid circular import
-        # Notify next user on waiting list
-        wait_list = self.waitlist_qs
-        if wait_list:
-            # Checking if user is on the wait list
-            on_wait_list = False
-            if unattended_user:
-                for waiting_user in wait_list:
-                    if waiting_user.user == unattended_user:
-                        on_wait_list = True
-                        break
-            if not on_wait_list:
-                # Send mail to first user on waiting list
-                attendees = wait_list[:extra_capacity]
-
-                handle_waitlist_bump(self.event, host, attendees, self.payment())
+        if not self.waitlist_qs:
+            return
+        bumped_attendees = self.waitlist_qs[:extra_capacity]
+        handle_waitlist_bump(self.event, bumped_attendees, self.payment())
 
     def is_eligible_for_signup(self, user):
         """
         Checks if a user can attend a specific event
         This method checks for:
-            Already attended
-            Waitlist
-            Room on event
-            Rules
-            Marks
-            Suspension
+        - Already attended
+        - Waitlist
+        - Room on event
+        - Rules
+        - Marks
+        - Suspension
         @param User object
         The returned dict contains a key called 'status_code'. These codes follow the HTTP
         standard in terms of overlying scheme.
@@ -612,8 +590,6 @@ class AttendanceEvent(models.Model):
         5XX = server error (event related)
         These codes are meant as a debugging tool only. The eligibility checking is quite
         extensive, and tracking where it's going wrong is much needed.
-        TODO:
-            Exception handling
         """
 
         response = {'status': False, 'message': '', 'status_code': None}
@@ -761,7 +737,7 @@ class AttendanceEvent(models.Model):
         return self.attendees.filter(user=user)
 
     def is_on_waitlist(self, user):
-        return reduce(lambda x, y: x or y.user == user, self.waitlist_qs, False)
+        return any(a.user == user for a in self.waitlist_qs)
 
     def what_place_is_user_on_wait_list(self, user):
         if self.waitlist:
@@ -772,19 +748,21 @@ class AttendanceEvent(models.Model):
                         return list(waitlist).index(attendee_object) + 1
         return 0
 
+    def payment(self):
+        try:
+            return self.payments.get()
+        except ObjectDoesNotExist:
+            return None
+
     def get_payments(self):
-        from apps.payment.models import Payment
-        return Payment.objects.filter(content_type=ContentType.objects.get_for_model(AttendanceEvent),
-                                      object_id=self.pk)
+        return self.payments.all()
 
     def get_payment(self):
-        from apps.payment.models import Payment
         try:
-            return Payment.objects.get(content_type=ContentType.objects.get_for_model(AttendanceEvent),
-                                       object_id=self.pk)
-        except Payment.DoesNotExist:
+            return self.payments.get()
+        except ObjectDoesNotExist:
             return None
-        except Payment.MultipleObjectsReturned:
+        except MultipleObjectsReturned:
             import logging
             logger = logging.getLogger(__name__)
             logger.warn("Multiple payment objects connected to attendance event #%s." % self.pk)
@@ -793,8 +771,29 @@ class AttendanceEvent(models.Model):
     def __str__(self):
         return self.event.title
 
+    def bump_waitlist(self):
+        """
+        Checks if any attendees should be bumped from the waitlist
+
+        Waitlist bumping can happen if e.g. max capacity or number of reserved seats is adjusted
+        This method should be called with edited fields, but before the attendance event is saved
+        as it looks at the difference between the fields.
+        """
+
+        old_attendance_event = AttendanceEvent.objects.filter(event_id=self.event_id).first()
+        if not old_attendance_event:
+            # Attendance event was just created
+            return
+
+        extra_capacity = self.number_of_attendee_seats - old_attendance_event.number_of_attendee_seats
+        if extra_capacity > 0:
+            # Using old object because waitlist has already been changed in self
+            old_attendance_event.bump_waitlist_for_x_users(extra_capacity)
+
     def save(self, force_insert=False, force_update=False, using=None,
              update_fields=None):
+        self.bump_waitlist()
+
         super().save(force_insert=force_insert, force_update=force_update, using=using, update_fields=update_fields)
 
         if self.event.organizer:
@@ -846,6 +845,8 @@ class Attendee(models.Model):
     note = models.CharField(_('notat'), max_length=100, blank=True, default='')
     extras = models.ForeignKey(Extras, blank=True, null=True)
 
+    show_as_attending_event = models.BooleanField(_('vis som påmeldt arrangementet'), default=False)
+
     def __str__(self):
         return self.user.get_full_name()
 
@@ -857,6 +858,9 @@ class Attendee(models.Model):
         except PaymentDelay.DoesNotExist:
             # Do nothing
             False
+
+        if not self.is_on_waitlist():
+            self.event.bump_waitlist_for_x_users()
 
         super(Attendee, self).delete()
 
@@ -892,6 +896,8 @@ class Reservation(models.Model):
 
     def save(self, force_insert=False, force_update=False, using=None,
              update_fields=None):
+        # Notify attendance event that the waitlist may have changed
+        self.attendance_event.bump_waitlist()
         super().save(force_insert=force_insert, force_update=force_update, using=using, update_fields=update_fields)
 
         if self.attendance_event.event.organizer:
@@ -945,6 +951,10 @@ class GroupRestriction(models.Model):
 
     groups = models.ManyToManyField(Group, blank=True,
                                     help_text=_('Legg til de gruppene som skal ha tilgang til arrangementet'))
+
+    def has_access(self, user):
+        # returns True if any of the users groups are in one of the accepted groups
+        return self.groups.filter(id__in=user.groups.all()).exists()
 
     class Meta:
         verbose_name = _("restriksjon")

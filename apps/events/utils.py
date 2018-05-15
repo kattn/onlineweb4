@@ -52,8 +52,7 @@ def get_types_allowed(user):
     return types_allowed
 
 
-def handle_waitlist_bump(event, host, attendees, payment=None):
-
+def handle_waitlist_bump(event, attendees, payment=None):
     title = 'Du har fått plass på %s' % (event.title)
 
     message = 'Du har stått på venteliste for arrangementet "%s" og har nå fått plass.\n' % (str(event.title))
@@ -64,7 +63,7 @@ def handle_waitlist_bump(event, host, attendees, payment=None):
         message += "Det kreves ingen ekstra handling fra deg med mindre du vil melde deg av."
 
     message += "\n\nFor mer info:"
-    message += "\nhttp://%s%s" % (host, event.get_absolute_url())
+    message += "\n%s%s" % (settings.BASE_URL, event.get_absolute_url())
 
     for attendee in attendees:
         send_mail(title, message, settings.DEFAULT_FROM_EMAIL, [attendee.user.email])
@@ -203,6 +202,8 @@ def handle_attendance_event_detail(event, user, context):
     can_unattend = True
     rules = []
     user_status = False
+    show_as_attending = False
+    user_setting_show_as_attending = False
 
     if attendance_event.rule_bundles:
         for rule_bundle in attendance_event.rule_bundles.all():
@@ -213,6 +214,7 @@ def handle_attendance_event_detail(event, user, context):
         if attendance_event.is_attendee(user):
             user_attending = True
             attendee = Attendee.objects.get(event=attendance_event, user=user)
+            show_as_attending = attendee.show_as_attending_event
 
         will_be_on_wait_list = attendance_event.will_i_be_on_wait_list
 
@@ -222,6 +224,9 @@ def handle_attendance_event_detail(event, user, context):
 
         # Check if this user is on the waitlist
         place_on_wait_list = attendance_event.what_place_is_user_on_wait_list(user)
+
+        # Get the default setting for visible as attending event from users privacy setting
+        user_setting_show_as_attending = user.get_visible_as_attending_events()
 
     context.update({
         'now': timezone.now(),
@@ -234,6 +239,8 @@ def handle_attendance_event_detail(event, user, context):
         'rules': rules,
         'user_status': user_status,
         'place_on_wait_list': int(place_on_wait_list),
+        'user_setting_show_as_attending': user_setting_show_as_attending,
+        'show_as_attending': show_as_attending,
         # 'position_in_wait_list': position_in_wait_list,
     })
     return context
@@ -345,6 +352,8 @@ def handle_mail_participants(event, _from_email, _to_email_value, subject, _mess
         from_email = settings.EMAIL_EKSKOM
     elif from_email_value == '6':
         from_email = settings.EMAIL_ITEX
+    elif from_email_value == '7':
+        from_email = settings.EMAIL_XSPORT
 
     if _to_email_value not in _to_email_options:
         return False
