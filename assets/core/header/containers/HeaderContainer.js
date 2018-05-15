@@ -7,6 +7,7 @@ class HeaderContainer extends Component {
     super(props);
     this.API_URL = '/sso/session_user?format=json';
     this.state = {
+      fullname: 'Ola Nordmann',
       username: 'ohno',
       staff: false,
       committee: true,
@@ -20,6 +21,7 @@ class HeaderContainer extends Component {
     .then(response => response.json())
     .then((results) => {
       this.setState({
+        fullname: `${results.first_name} ${results.last_name}`,
         username: results.username,
         staff: results.staff,
         committee: results.committee,
@@ -29,7 +31,12 @@ class HeaderContainer extends Component {
 
   render() {
     return (
-      <Header username={this.state.username} staff={this.state.staff} committee={this.state.committee} />
+      <Header
+        fullname={this.state.fullname}
+        username={this.state.username}
+        staff={this.state.staff}
+        committee={this.state.committee}
+      />
     );
   }
 }

@@ -4,6 +4,7 @@
 }
 
 @header-height: 64px;
+@user_menu-width: 256px;
 @logo-width: 128px;
 @gap-size: 16px;
 
@@ -30,7 +31,7 @@
 .Header__container {
   grid-column-start: 2;
   display: grid;
-  grid-template-columns: @logo-width auto @header-height;
+  grid-template-columns: @logo-width auto @user_menu-width;
   justify-items: end;
   grid-column-gap: @gap-size / 2;
 }
@@ -86,9 +87,12 @@
   text-decoration: none;
 }
 
-// Dropdown
-.Dropdown {
+// UserMenu
+.UserMenu {
   width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 
   &::before, &::after {
     content: "";
@@ -101,45 +105,61 @@
   }
 
   &::after {
-    transform: translateX(@header-height);
+    transform: translateX(@user_menu-width);
   }
 }
 
-.Dropdown__icon {
-  height: 100%;
-  width: 100%;
+.UserMenu__profile {
   color: white;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  margin-left: 8px;
 }
 
-.Dropdown__icon:hover {
+.UserMenu__profile-name, .UserMenu__profile-username {
+  color: white;
+  margin: 0;
+}
+
+.UserMenu__profile-username {
+  font-size: calc(@font-size - 2);
+}
+
+.UserMenu__icon {
+  display: flex;
+  width: 64px;
+  height: 64px;
+  justify-content: center;
+  align-items: center;
+  color: white;
+}
+
+.UserMenu__icon:hover {
   color: @orange;
   text-decoration: none;
 }
 
-.Dropdown__icon:focus:not(:hover) {
+.UserMenu__icon:focus:not(:hover) {
   text-decoration: none;
   color: white;
 }
 
-.Dropdown__menu {
+.UserMenu__menu {
+  top: 0;
+  transform: translateY(@header-height);
   z-index: 1;
   background: white;
   position: absolute;
+  width: @user_menu-width;
   box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
   padding: 0;
   margin: 0;
   list-style-type: none;
 }
 
-.Dropdown__menu-item:hover {
+.UserMenu__menu-item:hover {
   background: red;
 }
 
-.Dropdown__menu-item-text {
+.UserMenu__menu-item-text {
   padding: 4px 8px 4px;
   width: 100%;
   height: 100%;
@@ -147,7 +167,7 @@
   color: black;
 }
 
-.Dropdown__menu-item-text:hover {
+.UserMenu__menu-item-text:hover {
   color: black;
   text-decoration: inherit;
 }
