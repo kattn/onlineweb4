@@ -21,10 +21,28 @@ class Dropdown extends Component {
     if (!this.state.isOpen) {
       return null;
     }
+    const username = this.props.username;
     return (
-      <div className="Dropdown__menu">
-        <p>ho ho ho</p>
-      </div>
+      <ul className="Dropdown__menu">
+        {this.props.staff && <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/admin/">Administrasjon</a>
+        </li>}
+        {this.props.committee && <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/dashboard/">Dashboard</a>
+        </li>}
+        <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/profile/">Min side: { username }</a>
+        </li>
+        <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/contact/">Kontakt oss</a>
+        </li>
+        <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/profile/user_search/">Finn brukere</a>
+        </li>
+        <li className="Dropdown__menu-item">
+          <a className="Dropdown__menu-item-text" href="/auth/logout/">Logg ut</a>
+        </li>
+      </ul>
     );
   }
 
