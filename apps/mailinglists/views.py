@@ -83,7 +83,7 @@ def index(request):
             {'name': 'Dykkergruppa, NTNUI', 'email': 'kjellersjef@dykkergruppa.no'},
             {'name': 'Labamba', 'email': 'labamba@abakus.no'},
             {'name': 'Psykolosjen', 'email': 'psykokielderen@gmail.com'},
-            {'name': 'Realfagskjelleren', 'email': 'realfagskjellern-styre@list.stud.ntnu.no'},
+            {'name': 'Realfagskjelleren', 'email': 'styret@realfagskjelleren.no'},
         ]},
         {'name': 'foreninger', 'members': [
             {'name': 'Linjeforeninger', 'email': 'linjeforeninger@online.ntnu.no'},
